@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>بوابة الوكيل الرقمية - رصد الغياب والباركود</title>
+    
+    <meta name="theme-color" content="#0284c7">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <style>
+        :root {
+            --bg: #f0fdfa; 
+            --primary: #0284c7; 
+            --secondary: #0f172a;
+            --accent: #0ea5e9;
+            --muted: #64748b;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            
+            --exc-bg: #dcfce7; --exc-txt: #166534;
+            --cre-bg: #f3e8ff; --cre-txt: #6b21a8;
+            --vg-bg: #dbeafe; --vg-txt: #1e40af;
+            --fa-bg: #fef3c7; --fa-txt: #92400e;
+            --we-bg: #fee2e2; --we-txt: #991b1b;
+        }
+
+        * { box-sizing: border-box; font-family: 'Cairo', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: var(--bg); color: var(--secondary); padding-bottom: 40px; min-height: 100vh; }
+
+        .navbar { background: var(--surface); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.05); position: sticky; top: 0; z-index: 1000; border-bottom: 1px solid var(--border); }
+        .logo-box { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-size: 18px; }
+
+        .container { padding: 15px; max-width: 850px; margin: auto; }
+
+        .tabs-header { display: flex; gap: 8px; margin-bottom: 15px; }
+        .tab-btn { flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-weight: 700; font-size: 13px; cursor: pointer; color: var(--muted); transition: 0.2s; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.01); }
+        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .class-status-card { background: var(--surface); border-radius: 18px; padding: 16px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin-bottom: 20px; }
+        .class-grid-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 12px; }
+        
+        .class-badge-status { padding: 12px; border-radius: 12px; border: 1px solid var(--border); text-align: center; font-size: 12px; font-weight: 700; background: #f8fafc; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+        .class-badge-status.done { background: var(--exc-bg); color: var(--exc-txt); border-color: #bbf7d0; }
+        .class-badge-status.pending { background: #fff7ed; color: #c2410c; border-color: #ffedd5; }
+
+        .stats-container { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 20px; }
+        .stat-card { flex: 0 0 140px; background: var(--surface); border-radius: 16px; padding: 14px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid var(--border); text-align: center; cursor: pointer; transition: 0.2s; }
+        .stat-card h4 { margin: 0; color: var(--muted); font-size: 11px; font-weight: 700; }
+        .stat-card p { margin: 6px 0 0; font-size: 24px; font-weight: 900; color: var(--primary); }
+
+        .control-panel { background: var(--surface); border-radius: 20px; padding: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border); }
+        .class-selector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label { font-size: 12px; font-weight: 700; color: var(--muted); }
+        
+        .inp { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font-size: 14px; font-weight: 600; background: #f8fafc; outline: none; transition: 0.2s; }
+        .inp:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1); }
+
+        /* منطقة كاميرا الاسكانر */
+        .camera-scanner-wrapper { background: #0f172a; border: 2px dashed var(--primary); padding: 10px; border-radius: 18px; overflow: hidden; text-align: center; color: white; margin-bottom: 5px; }
+        #reader { width: 100%; max-width: 400px; margin: 0 auto; background: #000; border-radius: 12px; overflow: hidden; }
+
+        .btn-action { border: none; border-radius: 12px; padding: 12px 18px; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-weight: 700; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15); }
+        .btn-action:active { transform: scale(0.98); }
+
+        .attendance-options { display: flex; gap: 6px; margin-top: 10px; }
+        .att-btn { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; background: #f8fafc; text-align: center; transition: 0.15s; }
+        .att-btn.present.active { background: #22c55e; color: white; border-color: #22c55e; box-shadow: 0 4px 10px rgba(34, 197, 94, 0.2); }
+        .att-btn.absent.active { background: #ef4444; color: white; border-color: #ef4444; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.2); }
+        .att-btn.late.active { background: #eab308; color: white; border-color: #eab308; box-shadow: 0 4px 10px rgba(234, 179, 8, 0.2); }
+
+        .student-cards-list { display: flex; flex-direction: column; gap: 12px; }
+        .student-card { background: var(--surface); border-radius: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid var(--border); overflow: hidden; }
+        .student-header { padding: 16px; display: flex; justify-content: space-between; align-items: center; }
+        .std-name { font-weight: 900; font-size: 16px; color: var(--secondary); }
+
+        #agentPopup, #cardsPopup { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 5000; display: none; align-items: center; justify-content: center; padding: 20px; }
+        .popup-content { width: 100%; max-width: 450px; background: white; border-radius: 24px; padding: 22px; max-height: 80vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1); border: 1px solid var(--border); }
+        .popup-student-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f1f5f9; }
+        
+        .printable-cards-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-top: 15px; }
+        .student-barcode-card { background: #fff; border: 2px solid #000; padding: 15px; border-radius: 12px; text-align: center; color: #000; position: relative; }
+        .card-school-title { font-size: 12px; font-weight: 900; border-bottom: 1px dashed #ccc; padding-bottom: 5px; margin-bottom: 8px; }
+        .card-student-name { font-size: 16px; font-weight: 900; margin: 5px 0; }
+        .card-student-info { font-size: 11px; color: #333; margin-bottom: 8px; }
+        
+        .whatsapp-popup-btn { background: #25d366; color: white; border: none; padding: 8px 14px; border-radius: 10px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: 0.2s; }
+
+        #notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--secondary); color: white; padding: 12px 24px; border-radius: 50px; font-weight: 700; display: none; z-index: 6000; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .empty-state { text-align: center; padding: 30px; color: var(--muted); font-weight: 700; font-size: 14px; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #cardsPopup, #cardsPopup * { visibility: visible; }
+            #cardsPopup { position: absolute; left: 0; top: 0; width: 100%; background: none; backdrop-filter: none; display: block !important; overflow: visible; }
+            .popup-content { max-width: 100%; max-height: none; box-shadow: none; border: none; padding: 0; }
+            .btn-action, .close-print-btn { display: none !important; }
+            .printable-cards-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+            .student-barcode-card { page-break-inside: avoid; border: 1px solid #000; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="notification">تم رصد وتحديث الحالة بنجاح ✓</div>
+
+<div id="agentPopup">
+    <div class="popup-content">
+        <h3 id="popupTitle" style="margin-top:0; font-weight:900; font-size:16px; border-bottom:2px solid #f1f5f9; padding-bottom:10px; color:var(--secondary);">قائمة الطلاب</h3>
+        <div id="popupStudentsList"></div>
+        <button class="btn-action" onclick="closeAgentPopup()" style="width:100%; margin-top:15px; background:var(--muted); box-shadow: none;">إغلاق القائمة</button>
+    </div>
+</div>
+
+<div id="cardsPopup">
+    <div class="popup-content" style="max-width: 600px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px;">
+            <h3 style="margin:0; font-weight:900; font-size:16px; color:var(--secondary);">بطاقات هوية باركود الطلاب الذكية</h3>
+            <button class="btn-action" onclick="window.print()" style="padding: 6px 12px; font-size: 12px;">🖨️ طباعة البطاقات</button>
+        </div>
+        <div class="printable-cards-grid" id="barcodeCardsContainer"></div>
+        <button class="btn-action close-print-btn" onclick="document.getElementById('cardsPopup').style.display='none'" style="width:100%; margin-top:15px; background:var(--muted); box-shadow: none;">إغلاق الحاوية</button>
+    </div>
+</div>
+
+<nav class="navbar">
+    <div style="display:flex; gap:10px; align-items:center;">
+        <div class="logo-box">🕵️‍♂️</div>
+        <div>
+            <h2 style="margin:0; font-size:16px; font-weight:900;">لوحة الوكيل الرقمية الشاملة</h2>
+            <span style="font-size:11px; color:var(--muted)">إدارة السلوك، الباركود الذكي، ورصد الغياب اليومي</span>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="tabs-header">
+        <div class="tab-btn active" onclick="switchTab('monitoringTab', this)">📊 مراقبة مستويات الطلاب</div>
+        <div class="tab-btn" id="attendanceTabBtn" onclick="switchTab('attendanceTab', this)">📝 تحضير ورصد الغياب اليومي</div>
+    </div>
+
+    <div id="monitoringTab" class="tab-content active">
+        <div class="stats-container">
+            <div class="stat-card"><h4>إجمالي الطلاب للفصل</h4><p id="totalStds">0</p></div>
+            <div class="stat-card" onclick="openIndicatorPopup('exc')"><h4>المتميزون ✨</h4><p id="excCount" style="color:#166534">0</p></div>
+            <div class="stat-card" onclick="openIndicatorPopup('we')"><h4>الطلاب الضعاف ⚠️</h4><p id="weakCount" style="color:#991b1b">0</p></div>
+            <div class="stat-card"><h4>إجراءات صادرة</h4><p id="warnCount">0</p></div>
+        </div>
+
+        <div class="control-panel">
+            <div class="class-selector-grid">
+                <div class="form-group">
+                    <label>تحديد الصف الدراسي</label>
+                    <select id="selGrade" class="inp" onchange="handleGradeChange('selClassroom')">
+                        <option value="">اختر الصف</option>
+                        <option value="الصف الأول">الصف الأول</option>
+                        <option value="الصف الثاني">الصف الثاني</option>
+                        <option value="الصف الثالث">الصف الثالث</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>الفصل المستهدف</label>
+                    <select id="selClassroom" class="inp" onchange="fetchStudentsForAgent()"></select>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; align-items: center;">
+                <div class="form-group" style="flex:1;">
+                    <input type="text" id="searchInp" class="inp" placeholder="ابحث باسم الطالب للمراقبة..." onkeyup="doSearch('agentStudentsContainer')">
+                </div>
+                <button class="btn-action" onclick="generateStudentBarcodeCards()" style="background:var(--secondary);">🪪 توليد كروت الباركود</button>
+            </div>
+        </div>
+
+        <div class="student-cards-list" id="agentStudentsContainer">
+            <div class="empty-state">⚠️ حدد الصف والفصل لعرض المؤشرات وتوليد البطاقات...</div>
+        </div>
+    </div>
+
+    <div id="attendanceTab" class="tab-content">
+        
+        <div class="class-status-card">
+            <h3 style="margin:0 0 5px 0; font-size:14px; font-weight:900; color:var(--secondary)">📋 جدول متابعة تحضير الفصول اليوم:</h3>
+            <span style="font-size:11px; color:var(--muted)">تحديث حي وتلقائي بناءً على تاريخ اليوم: <strong id="currentDateDisplay"></strong></span>
+            <div class="class-grid-list" id="classesStatusContainer">
+                <div class="empty-state" style="padding:10px; font-size:12px;">جاري فحص حالة الفصول...</div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="camera-scanner-wrapper">
+                <div style="font-size:12px; font-weight:700; margin-bottom:8px; opacity:0.9;">📷 سكانر باركود كاميرا الجوال / الكمبيوتر البث المباشر</div>
+                <div id="reader"></div>
+                <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
+                    <button class="btn-action" style="background:#22c55e; padding:8px 14px; font-size:12px;" onclick="startCameraScanner()">▶️ تشغيل الكاميرا</button>
+                    <button class="btn-action" style="background:#ef4444; padding:8px 14px; font-size:12px;" onclick="stopCameraScanner()">⏹️ إيقاف</button>
+                </div>
+            </div>
+
+            <div class="class-selector-grid">
+                <div class="form-group">
+                    <label>الصف المراد تحضيره</label>
+                    <select id="selGradeAtt" class="inp" onchange="handleGradeChange('selClassroomAtt')">
+                        <option value="">اختر الصف</option>
+                        <option value="الصف الأول">الصف الأول</option>
+                        <option value="الصف الثاني">الصف الثاني</option>
+                        <option value="الصف الثالث">الصف الثالث</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>الفصل الدراسي</label>
+                    <select id="selClassroomAtt" class="inp" onchange="loadStudentsForAttendance()"></select>
+                </div>
+            </div>
+            <div class="form-group">
+                <input type="text" id="searchInpAtt" class="inp" placeholder="ابحث باسم الطالب للتحضير السريع اليدوي..." onkeyup="doSearch('attendanceStudentsContainer')">
+            </div>
+            <div style="display: flex; gap:10px; margin-top:5px;">
+                <button class="btn-action" style="flex:1;" onclick="markAllAttendance('حاضر')">✅ تعيين الكل حضور</button>
+                <button class="btn-action" style="flex:1;" onclick="saveClassAttendance()">💾 حفظ وإرسال كشف التحضير لفايربيس</button>
+            </div>
+        </div>
+
+        <div class="student-cards-list" id="attendanceStudentsContainer">
+            <div class="empty-state">💡 اختر الفصل الدراسي أو انقر على الفصول بالأعلى لبدء رصد حالة الطلاب...</div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const firebaseConfig = {
+    apiKey: "AIzaSyCIW17B6y6sG_bdUFqF7FWoVIY9ynXv1B4",
+    authDomain: "myschoolproject-4ad92.firebaseapp.com",
+    databaseURL: "https://myschoolproject-4ad92-default-rtdb.firebaseio.com",
+    projectId: "myschoolproject-4ad92"
+};
+
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+const database = firebase.database();
+
+let activeAttendanceRecords = {}; 
+let globalStudentsCache = {}; 
+let globalEvaluationsCache = {}; 
+let html5QrcodeScanner = null;
+let lastScannedCode = ""; 
+let lastScannedTime = 0;
+
+const todayDateKey = new Date().toLocaleDateString('en-CA'); 
+document.getElementById('currentDateDisplay').innerText = new Date().toLocaleDateString('ar-SA');
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSuccessBeep() {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880; 
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    listenToClassesAttendance();
+});
+
+function switchTab(tabId, btn) {
+    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(tb => tb.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+}
+
+function handleGradeChange(targetSelectId, callback) {
+    const isAtt = targetSelectId === 'selClassroomAtt';
+    const selectedGrade = document.getElementById(isAtt ? 'selGradeAtt' : 'selGrade').value;
+    const classroomSelect = document.getElementById(targetSelectId);
+    classroomSelect.innerHTML = '<option value="">جاري الفحص...</option>';
+    
+    if(!selectedGrade) {
+        classroomSelect.innerHTML = '<option value="">اختر الصف أولاً</option>';
+        return;
+    }
+
+    database.ref('students').once('value', snapshot => {
+        const data = snapshot.val() || {};
+        classroomSelect.innerHTML = '<option value="">اختر الفصل</option>';
+        
+        let hasClasses = false;
+        for(let clsKey in data) {
+            if(
+                clsKey.includes(selectedGrade) || 
+                (selectedGrade === "الصف الأول" && (clsKey.includes("أول") || clsKey.includes("1-") || clsKey.includes("1/"))) || 
+                (selectedGrade === "الصف الثاني" && (clsKey.includes("ثاني") || clsKey.includes("2-") || clsKey.includes("2/"))) || 
+                (selectedGrade === "الصف الثالث" && (clsKey.includes("ثالث") || clsKey.includes("3-") || clsKey.includes("3/")))
+            ) {
+                classroomSelect.innerHTML += `<option value="${clsKey}">${clsKey}</option>`;
+                hasClasses = true;
+            }
+        }
+        if(!hasClasses) { classroomSelect.innerHTML = '<option value="">لا توجد فصول مدرجة</option>'; }
+        if(callback) callback();
+    });
+}
+
+function selectClassroomDirectly(className) {
+    let targetGrade = "";
+    if(className.includes("أول") || className.includes("الأول") || className.startsWith("1")) targetGrade = "الصف الأول";
+    else if(className.includes("ثاني") || className.includes("الثاني") || className.startsWith("2")) targetGrade = "الصف الثاني";
+    else if(className.includes("ثالث") || className.includes("الثالث") || className.startsWith("3")) targetGrade = "الصف الثالث";
+    else targetGrade = "الصف الأول"; 
+
+    switchTab('attendanceTab', document.getElementById('attendanceTabBtn'));
+    document.getElementById('selGradeAtt').value = targetGrade;
+    
+    handleGradeChange('selClassroomAtt', () => {
+        document.getElementById('selClassroomAtt').value = className;
+        loadStudentsForAttendance();
+    });
+}
+
+function listenToClassesAttendance() {
+    const container = document.getElementById('classesStatusContainer');
+    database.ref('students').on('value', stdSnapshot => {
+        const allClassrooms = Object.keys(stdSnapshot.val() || {});
+        database.ref(`attendance/${todayDateKey}`).on('value', attSnapshot => {
+            const attData = attSnapshot.val() || {};
+            container.innerHTML = '';
+            
+            if(allClassrooms.length === 0) {
+                container.innerHTML = `<div class="empty-state">لا توجد فصول مسجلة في النظام.</div>`;
+                return;
+            }
+
+            allClassrooms.forEach(cls => {
+                const isPrepared = attData[cls] ? true : false;
+                const badgeClass = isPrepared ? 'done' : 'pending';
+                const statusText = isPrepared ? '✓ تم التحضير' : '⏳ معلق / لم يحضر';
+                
+                container.innerHTML += `
+                    <div class="class-badge-status ${badgeClass}" onclick="selectClassroomDirectly('${cls}')">
+                        <div>${cls}</div>
+                        <div style="font-size:10px; margin-top:4px; opacity:0.9;">${statusText}</div>
+                    </div>
+                `;
+            });
+        });
+    });
+}
+
+function loadStudentsForAttendance() {
+    const cls = document.getElementById('selClassroomAtt').value;
+    const container = document.getElementById('attendanceStudentsContainer');
+    if(!cls) return;
+
+    container.innerHTML = '<div class="empty-state">جاري سحب كشف أسماء الطلاب واستعادة حالة الرصد الحالية...</div>';
+    activeAttendanceRecords = {};
+
+    database.ref('students/' + cls).once('value', snapshot => {
+        const students = snapshot.val() || {};
+        database.ref(`attendance/${todayDateKey}/${cls}`).once('value', attSnapshot => {
+            const savedAtt = attSnapshot.val() || {};
+            container.innerHTML = '';
+
+            for(let key in students) {
+                const s = students[key];
+                const currentStatus = savedAtt[key] ? savedAtt[key].status : 'حاضر';
+                activeAttendanceRecords[key] = currentStatus;
+
+                container.innerHTML += `
+                    <div class="student-card" id="att_card_${key}" data-parentid="${s.parentId}">
+                        <div class="student-header">
+                            <div>
+                                <div class="std-name">${s.name}</div>
+                                <div style="font-size:11px; color:var(--muted); margin-top:2px;">الهوية/الكود: <span class="pid-lookup">${s.parentId || 'غير مسند'}</span></div>
+                            </div>
+                        </div>
+                        <div style="padding: 0 16px 16px 16px;">
+                            <div class="attendance-options">
+                                <div class="att-btn present ${currentStatus === 'حاضر' ? 'active' : ''}" onclick="setStudentStatus('${key}', 'حاضر')">حاضر ✓</div>
+                                <div class="att-btn absent ${currentStatus === 'غائب' ? 'active' : ''}" onclick="setStudentStatus('${key}', 'غائب')">غائب ❌</div>
+                                <div class="att-btn late ${currentStatus === 'متأخر' ? 'active' : ''}" onclick="setStudentStatus('${key}', 'متأخر')">متأخر ⏳</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+    });
+}
+
+// دالة تشغيل سكانر كاميرا الجوال لقراءة الباركود فوراً
+function startCameraScanner() {
+    if(html5QrcodeScanner) { stopCameraScanner(); }
+    
+    html5QrcodeScanner = new Html5Qrcode("reader");
+    const config = { fps: 15, qrbox: { width: 280, height: 160 } };
+
+    // تشغيل الكاميرا الخلفية تلقائياً للجوال (facingMode environment) لسهولة التوجيه
+    html5QrcodeScanner.start(
+        { facingMode: "environment" }, 
+        config,
+        (decodedText) => {
+            const now = Date.now();
+            // منع تكرار المسح لنفس الكود مرتين في أقل من 3 ثوانٍ لمنع الأخطاء العشوائية
+            if (decodedText === lastScannedCode && (now - lastScannedTime < 3000)) {
+                return;
+            }
+            lastScannedCode = decodedText;
+            lastScannedTime = now;
+            
+            processScannedBarcode(decodedText.trim());
+        },
+        (errorMessage) => { /* تجاهل أخطاء البحث المستمر عن باركود */ }
+    ).catch(err => {
+        alert("⚠️ خطأ في تشغيل الكاميرا، يرجى إعطاء صلاحية الكاميرا للمتصفح: " + err);
+    });
+}
+
+function stopCameraScanner() {
+    if(html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+            html5QrcodeScanner = null;
+            document.getElementById('reader').innerHTML = "";
+        }).catch(err => console.log("خطأ في الإيقاف", err));
+    }
+}
+
+// معالجة القيمة المقروءة من الكاميرا ومطابقتها
+function processScannedBarcode(scannedCode) {
+    let found = false;
+    document.querySelectorAll('#attendanceStudentsContainer .student-card').forEach(card => {
+        const parentId = card.getAttribute('data-parentid');
+        const studentKey = card.id.replace('att_card_', '');
+        
+        if (parentId === scannedCode) {
+            setStudentStatus(studentKey, 'حاضر');
+            playSuccessBeep();
+            
+            const stdName = card.querySelector('.std-name').innerText;
+            const n = document.getElementById('notification');
+            n.innerText = `📸 تم رصد حضور: ${stdName} ✓`;
+            n.style.display = 'block';
+            setTimeout(() => n.style.display = 'none', 2500);
+
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            found = true;
+        }
+    });
+
+    if (!found) {
+        // نغمة تنبيه بسيطة للخطأ في حال الرمز غير مدرج في هذا الفصل
+        const osc = audioCtx.createOscillator();
+        osc.frequency.value = 220;
+        osc.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+    }
+}
+
+function generateStudentBarcodeCards() {
+    const cls = document.getElementById('selClassroom').value;
+    if(!cls) { alert("💡 يرجى تحديد الصف والفصل أولاً لتوليد كروت الباركود."); return; }
+
+    const container = document.getElementById('barcodeCardsContainer');
+    container.innerHTML = '';
+
+    if (Object.keys(globalStudentsCache).length === 0) {
+        alert("لا توجد بيانات طلاب مسحوبة حالياً لهذا الفصل.");
+        return;
+    }
+
+    for (let key in globalStudentsCache) {
+        const s = globalStudentsCache[key];
+        const barcodeVal = s.parentId ? s.parentId.toString().trim() : "000000";
+
+        container.innerHTML += `
+            <div class="student-barcode-card">
+                <div class="card-school-title">وزارة التعليم - إدارة شؤون الطلاب</div>
+                <div class="card-student-name">${s.name}</div>
+                <div class="card-student-info">الفصل المستهدف: ${cls} | رقم الهوية: ${barcodeVal}</div>
+                <svg id="barcode_svg_${key}"></svg>
+            </div>
+        `;
+    }
+
+    document.getElementById('cardsPopup').style.display = 'flex';
+
+    setTimeout(() => {
+        for (let key in globalStudentsCache) {
+            const s = globalStudentsCache[key];
+            const barcodeVal = s.parentId ? s.parentId.toString().trim() : "000000";
+            JsBarcode(`#barcode_svg_${key}`, barcodeVal, {
+                format: "CODE128",
+                width: 2,
+                height: 45,
+                displayValue: true,
+                fontSize: 12
+            });
+        }
+    }, 200);
+}
+
+function setStudentStatus(stdKey, status) {
+    activeAttendanceRecords[stdKey] = status;
+    const card = document.getElementById(`att_card_${stdKey}`);
+    if(!card) return;
+    card.querySelectorAll('.att-btn').forEach(btn => btn.classList.remove('active'));
+    
+    if(status === 'حاضر') card.querySelector('.att-btn.present').classList.add('active');
+    if(status === 'غائب') card.querySelector('.att-btn.absent').classList.add('active');
+    if(status === 'متأخر') card.querySelector('.att-btn.late').classList.add('active');
+}
+
+function markAllAttendance(status) {
+    for(let key in activeAttendanceRecords) {
+        setStudentStatus(key, status);
+    }
+}
+
+function saveClassAttendance() {
+    const cls = document.getElementById('selClassroomAtt').value;
+    if(!cls) { alert('يرجى اختيار فصل أولاً لحفظ كشف الغياب'); return; }
+
+    let bulkData = {};
+    for(let stdKey in activeAttendanceRecords) {
+        bulkData[stdKey] = {
+            status: activeAttendanceRecords[stdKey],
+            updatedAt: new Date().toLocaleTimeString('ar-SA')
+        };
+    }
+
+    database.ref(`attendance/${todayDateKey}/${cls}`).set(bulkData).then(() => {
+        const n = document.getElementById('notification');
+        n.innerText = "تم حفظ سجل التحضير والمؤشرات بنجاح ✓";
+        n.style.display = 'block';
+        setTimeout(() => n.style.display = 'none', 2500);
+    }).catch(err => alert("خطأ أثناء رصد الغياب: " + err.message));
+}
+
+function fetchStudentsForAgent() {
+    const cls = document.getElementById('selClassroom').value;
+    const container = document.getElementById('agentStudentsContainer');
+    if(!cls) return;
+
+    container.innerHTML = '<div class="empty-state">جاري سحب السجلات السلوكية من المعلمين...</div>';
+
+    database.ref('students/' + cls).once('value').then(studentSnapshot => {
+        const studentsList = studentSnapshot.val() || {};
+        globalStudentsCache = studentsList;
+
+        database.ref('evaluations/' + cls).on('value', evalSnapshot => {
+            const globalEvaluationsData = evalSnapshot.val() || {};
+            globalEvaluationsCache = globalEvaluationsData;
+
+            container.innerHTML = '';
+            let totalStudentsCount = 0, totalExc = 0, totalWeak = 0, totalWarn = 0;
+
+            for(let stdKey in studentsList) {
+                totalStudentsCount++;
+                const s = studentsList[stdKey];
+                const stdEvals = globalEvaluationsData[stdKey] || {};
+                
+                let excStreak = 0, weakStreak = 0;
+                for(let evKey in stdEvals) {
+                    const ev = stdEvals[evKey];
+                    if(ev.level === 'exc' || ev.level === 'cre') excStreak++;
+                    if(ev.level === 'we') weakStreak++;
+                    if(ev.warning) totalWarn++;
+                }
+
+                let statusBadge = '<span style="font-size:11px;" class="badge-status">📋 مستقر</span>';
+                if(weakStreak > 0 && weakStreak >= excStreak) {
+                    statusBadge = '<span style="color:var(--we-txt); background:var(--we-bg); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:700;">⚠️ ضعيف</span>';
+                    totalWeak++;
+                } else if(excStreak > 0 && excStreak > weakStreak) {
+                    statusBadge = '<span style="color:var(--exc-txt); background:var(--exc-bg); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:700;">✨ متميز</span>';
+                    totalExc++;
+                }
+
+                container.innerHTML += `
+                    <div class="student-card">
+                        <div class="student-header">
+                            <div><div class="std-name">${s.name}</div></div>
+                            <div>${statusBadge}</div>
+                        </div>
+                    </div>`;
+            }
+
+            document.getElementById('totalStds').innerText = totalStudentsCount;
+            document.getElementById('excCount').innerText = totalExc;
+            document.getElementById('weakCount').innerText = totalWeak;
+            document.getElementById('warnCount').innerText = totalWarn;
+        });
+    });
+}
+
+function openIndicatorPopup(type) {
+    const cls = document.getElementById('selClassroom').value;
+    if(!cls) { alert("💡 يرجى تحديد الصف والفصل المستهدف أولاً لرؤية كشف المؤشر."); return; }
+
+    const titleEl = document.getElementById('popupTitle');
+    const containerEl = document.getElementById('popupStudentsList');
+    containerEl.innerHTML = '';
+
+    if(type === 'exc') { titleEl.innerText = `قائمة الطلاب المتميزين ✨ - فصل (${cls})`; } 
+    else if(type === 'we') { titleEl.innerText = `قائمة الطلاب الضعاف ⚠️ - فصل (${cls})`; }
+
+    let itemsFound = 0;
+    for(let stdKey in globalStudentsCache) {
+        const student = globalStudentsCache[stdKey];
+        const stdEvals = globalEvaluationsCache[stdKey] || {};
+        
+        let excStreak = 0, weakStreak = 0;
+        for(let evKey in stdEvals) {
+            const ev = stdEvals[evKey];
+            if(ev.level === 'exc' || ev.level === 'cre') excStreak++;
+            if(ev.level === 'we') weakStreak++;
+        }
+
+        let isMatch = false;
+        if(type === 'we' && weakStreak > 0 && weakStreak >= excStreak) isMatch = true;
+        if(type === 'exc' && excStreak > 0 && excStreak > weakStreak) isMatch = true;
+
+        if(isMatch) {
+            itemsFound++;
+            containerEl.innerHTML += `
+                <div class="popup-student-item">
+                    <span class="popup-student-name">${student.name}</span>
+                    <button class="whatsapp-popup-btn" onclick="sendWhatsAppFromPopup('${stdKey}', '${type}')">💬 مراسلة الوالد</button>
+                </div>
+            `;
+        }
+    }
+    if(itemsFound === 0) { containerEl.innerHTML = `<div style="text-align:center; padding:20px; color:var(--muted); font-weight:700;">لا يوجد طلاب مدرجون تحت هذا المؤشر حالياً.</div>`; }
+    document.getElementById('agentPopup').style.display = 'flex';
+}
+
+function closeAgentPopup() { document.getElementById('agentPopup').style.display = 'none'; }
+
+function sendWhatsAppFromPopup(stdKey, type) {
+    const student = globalStudentsCache[stdKey];
+    if(!student) return;
+
+    let rawPhone = student.parentId || "";
+    rawPhone = rawPhone.toString().trim();
+
+    if(!rawPhone) { alert("⚠️ حقل الهاتف فارغ لدى هذا الطالب!"); return; }
+
+    if(rawPhone.startsWith('05')) { rawPhone = '966' + rawPhone.substring(1); } 
+    else if(rawPhone.startsWith('5')) { rawPhone = '966' + rawPhone; }
+
+    const cls = document.getElementById('selClassroom').value;
+    let messageTemplate = "";
+
+    if(type === 'exc') {
+        messageTemplate = `ولي أمر الطالب المحترم: ${student.name}%0Aالسلام عليكم ورحمة الله وبركاته ..%0A%0Aيسر *وكالة شؤون الطلاب بالمدرسة* أن تعرب لكم عن بالغ شكرها وتقديرها لتميز ابننا الأكاديمي والسلوكي المرصود في فصل (${cls})، متمنين له دوام التوفيق والنجاح المستمر. ✨✨`;
+    } else if(type === 'we') {
+        messageTemplate = `إشعار متابعة من إدارة المدرسة ..%0Aولي أمر الطالب المحترم: ${student.name}%0Aالسلام عليكم ورحمة الله وبركاته ..%0A%0Aنحيطكم علماً بأن رادار مؤشرات أداء الطالب في فصل (${cls}) قد رصد تراجعاً ملحوظاً في المستوى الأكاديمي أو الواجبات المدرسية مؤخراً (ضعيف ⚠️).%0A%0Aنأمل من سعادتكم متابعة الطالب وحثه على الاجتهاد، أو تشريفنا بزيارة المدرسة لمقابلة الموجه الطلابي لتدارك مستواه في أقرب وقت.`;
+    }
+    window.open(`https://wa.me/${rawPhone}?text=${messageTemplate}`, '_blank');
+}
+
+function doSearch(containerId) {
+    let searchInputId = containerId === 'agentStudentsContainer' ? 'searchInp' : 'searchInpAtt';
+    let v = document.getElementById(searchInputId).value.toLowerCase().trim();
+    document.querySelectorAll(`#${containerId} .student-card`).forEach(card => {
+        const name = card.querySelector('.std-name').innerText.toLowerCase();
+        card.style.display = name.includes(v) ? '' : 'none';
+    });
+}
+</script>
+</body>
+</html>
